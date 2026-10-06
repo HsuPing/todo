@@ -10,8 +10,7 @@ import (
 )
 
 // MemoryStore 是以記憶體儲存資料的 Store 實作。
-//
-// TODO: 自行設計需要的欄位（資料容器、下一個 ID、鎖……）。
+
 type MemoryStore struct {
 	mu     sync.Mutex
 	todos  map[int]Todo
