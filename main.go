@@ -1,9 +1,13 @@
 package main
 
 import (
+	"context"
+	"errors"
 	"log"
 	"net/http"
 	"os"
+	"os/signal"
+	"syscall"
 	"time"
 
 	"todo/handler"
@@ -16,13 +20,36 @@ func main() {
 		port = "8080"
 	}
 
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+
 	s := store.NewMemoryStore()
 	h := logging(handler.New(s))
 
-	// TODO（加分題 A）：改用 http.Server 並實作 graceful shutdown。
 	// TODO（加分題 C）：啟動背景 goroutine 定期印出未完成數量，並用 context 控制結束。
-	log.Printf("listening on :%s", port)
-	log.Fatal(http.ListenAndServe(":"+port, h))
+	server := &http.Server{
+		Addr:    ":" + port,
+		Handler: h,
+	}
+
+	go func() {
+		log.Printf("listening on :%s", port)
+		if err := server.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+			log.Fatal(err)
+		}
+	}()
+
+	<-ctx.Done()
+	log.Println("shutting down...")
+
+	shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	if err := server.Shutdown(shutdownCtx); err != nil {
+		log.Printf("shutdown error: %v", err)
+	}
+
+	log.Println("shutdown complete")
 }
 
 // logging 包住 next，每個請求都印出方法、路徑、狀態碼和花費時間。
