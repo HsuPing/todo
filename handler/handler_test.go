@@ -51,17 +51,20 @@ func TestHandler_StatusCodes(t *testing.T) {
 		// GET /todos
 		{name: "列出全部", method: "GET", path: "/todos", wantStatus: http.StatusOK, wantBody: `"title":"買牛奶"`},
 		{name: "done 不是布林值", method: "GET", path: "/todos?done=abc", wantStatus: http.StatusBadRequest, wantBody: `"error"`},
+		{name: "done 是 1", method: "GET", path: "/todos?done=1", wantStatus: http.StatusBadRequest, wantBody: `"error"`},
 
 		// GET /todos/{id}
 		{name: "查詢存在的 id", method: "GET", path: "/todos/1", wantStatus: http.StatusOK, wantBody: `"id":1`},
 		{name: "查詢不存在的 id", method: "GET", path: "/todos/999", wantStatus: http.StatusNotFound, wantBody: `"error"`},
 		{name: "查詢 id 不是數字", method: "GET", path: "/todos/abc", wantStatus: http.StatusBadRequest, wantBody: `"error"`},
+		{name: "查詢 id 為 0", method: "GET", path: "/todos/0", wantStatus: http.StatusBadRequest, wantBody: `"error"`},
 
 		// POST /todos
 		{name: "新增成功", method: "POST", path: "/todos", body: `{"title":"買豆漿"}`, wantStatus: http.StatusCreated, wantBody: `"title":"買豆漿"`},
 		{name: "新增 title 空白", method: "POST", path: "/todos", body: `{"title":"   "}`, wantStatus: http.StatusBadRequest, wantBody: `"error"`},
 		{name: "新增沒有 title", method: "POST", path: "/todos", body: `{}`, wantStatus: http.StatusBadRequest, wantBody: `"error"`},
 		{name: "新增 body 不是 JSON", method: "POST", path: "/todos", body: `not json`, wantStatus: http.StatusBadRequest, wantBody: `"error"`},
+		{name: "新增有未知欄位", method: "POST", path: "/todos", body: `{"title":"a","priority":1}`, wantStatus: http.StatusBadRequest, wantBody: `"error"`},
 
 		// PUT /todos/{id}
 		{name: "更新成功", method: "PUT", path: "/todos/1", body: `{"done":true}`, wantStatus: http.StatusOK, wantBody: `"done":true`},
@@ -69,11 +72,14 @@ func TestHandler_StatusCodes(t *testing.T) {
 		{name: "更新不存在的 id", method: "PUT", path: "/todos/999", body: `{"done":true}`, wantStatus: http.StatusNotFound, wantBody: `"error"`},
 		{name: "更新 id 不是數字", method: "PUT", path: "/todos/abc", body: `{"done":true}`, wantStatus: http.StatusBadRequest, wantBody: `"error"`},
 		{name: "更新 body 不是 JSON", method: "PUT", path: "/todos/1", body: `not json`, wantStatus: http.StatusBadRequest, wantBody: `"error"`},
+		{name: "更新沒有任何欄位", method: "PUT", path: "/todos/1", body: `{}`, wantStatus: http.StatusBadRequest, wantBody: `"error"`},
+		{name: "更新有未知欄位", method: "PUT", path: "/todos/1", body: `{"done":true,"foo":1}`, wantStatus: http.StatusBadRequest, wantBody: `"error"`},
 
 		// DELETE /todos/{id}
 		{name: "刪除成功", method: "DELETE", path: "/todos/1", wantStatus: http.StatusNoContent},
 		{name: "刪除不存在的 id", method: "DELETE", path: "/todos/999", wantStatus: http.StatusNotFound, wantBody: `"error"`},
 		{name: "刪除 id 不是數字", method: "DELETE", path: "/todos/abc", wantStatus: http.StatusBadRequest, wantBody: `"error"`},
+		{name: "刪除 id 為負數", method: "DELETE", path: "/todos/-1", wantStatus: http.StatusBadRequest, wantBody: `"error"`},
 
 		// 路由本身
 		{name: "不支援的方法", method: "PATCH", path: "/todos/1", wantStatus: http.StatusMethodNotAllowed},

@@ -26,9 +26,9 @@ func writeError(w http.ResponseWriter, status int, msg string) {
 func writeStoreError(w http.ResponseWriter, err error) {
 	switch {
 	case errors.Is(err, store.ErrNotFound):
-		writeError(w, http.StatusNotFound, err.Error())
+		writeError(w, http.StatusNotFound, "todo not found")
 	case errors.Is(err, store.ErrInvalidTitle):
-		writeError(w, http.StatusBadRequest, err.Error())
+		writeError(w, http.StatusBadRequest, "invalid title")
 	default:
 		writeError(w, http.StatusInternalServerError, "internal error")
 	}
@@ -44,11 +44,11 @@ func New(s store.Store) http.Handler {
 	mux.HandleFunc("GET /todos", func(w http.ResponseWriter, r *http.Request) {
 		var done *bool
 		if v := r.URL.Query().Get("done"); v != "" {
-			b, err := strconv.ParseBool(v)
-			if err != nil {
+			if v != "true" && v != "false" {
 				writeError(w, http.StatusBadRequest, "invalid done")
 				return
 			}
+			b := v == "true"
 			done = &b
 		}
 
@@ -61,8 +61,8 @@ func New(s store.Store) http.Handler {
 	})
 
 	mux.HandleFunc("GET /todos/{id}", func(w http.ResponseWriter, r *http.Request) {
-		id, err := strconv.Atoi(r.PathValue("id"))
-		if err != nil {
+		id, ok := parseID(r)
+		if !ok {
 			writeError(w, http.StatusBadRequest, "invalid id")
 			return
 		}
@@ -75,13 +75,16 @@ func New(s store.Store) http.Handler {
 	})
 
 	mux.HandleFunc("POST /todos", func(w http.ResponseWriter, r *http.Request) {
-		var todo store.Todo
-		err := json.NewDecoder(r.Body).Decode(&todo)
-		if err != nil {
+		var body struct {
+			Title string `json:"title"`
+		}
+		dec := json.NewDecoder(r.Body)
+		dec.DisallowUnknownFields()
+		if err := dec.Decode(&body); err != nil {
 			writeError(w, http.StatusBadRequest, "invalid JSON")
 			return
 		}
-		todo, err = s.Create(r.Context(), todo.Title)
+		todo, err := s.Create(r.Context(), body.Title)
 		if err != nil {
 			writeStoreError(w, err)
 			return
@@ -95,17 +98,22 @@ func New(s store.Store) http.Handler {
 			Done  *bool   `json:"done"`
 		}
 
-		id, err := strconv.Atoi(r.PathValue("id"))
+		id, ok := parseID(r)
 
-		if err != nil {
+		if !ok {
 			writeError(w, http.StatusBadRequest, "invalid id")
 			return
 		}
 
-		err = json.NewDecoder(r.Body).Decode(&body)
-
-		if err != nil {
+		dec := json.NewDecoder(r.Body)
+		dec.DisallowUnknownFields()
+		if err := dec.Decode(&body); err != nil {
 			writeError(w, http.StatusBadRequest, "invalid JSON")
+			return
+		}
+
+		if body.Title == nil && body.Done == nil {
+			writeError(w, http.StatusBadRequest, "no fields to update")
 			return
 		}
 
@@ -118,12 +126,13 @@ func New(s store.Store) http.Handler {
 	})
 
 	mux.HandleFunc("DELETE /todos/{id}", func(w http.ResponseWriter, r *http.Request) {
-		id, err := strconv.Atoi(r.PathValue("id"))
-		if err != nil {
+		id, ok := parseID(r)
+		if !ok {
 			writeError(w, http.StatusBadRequest, "invalid id")
 			return
 		}
-		err = s.Delete(r.Context(), id)
+
+		err := s.Delete(r.Context(), id)
 		if err != nil {
 			writeStoreError(w, err)
 			return
@@ -132,4 +141,13 @@ func New(s store.Store) http.Handler {
 	})
 
 	return mux
+}
+
+// parseID 從路徑取出 id，必須是正整數。
+func parseID(r *http.Request) (int, bool) {
+	id, err := strconv.Atoi(r.PathValue("id"))
+	if err != nil || id <= 0 {
+		return 0, false
+	}
+	return id, true
 }
