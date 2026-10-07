@@ -7,7 +7,6 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
-	"sync"
 	"syscall"
 	"time"
 
@@ -34,12 +33,7 @@ func main() {
 	*/
 	h = logging(h)
 
-	var wg sync.WaitGroup
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		reportPending(ctx, s, 10*time.Second)
-	}()
+	waitReporter := startReporter(ctx, s, 10*time.Second)
 
 	server := &http.Server{
 		Addr:    ":" + port,
@@ -63,28 +57,6 @@ func main() {
 		log.Printf("shutdown error: %v", err)
 	}
 
-	wg.Wait()
+	waitReporter()
 	log.Println("shutdown complete")
-}
-
-// reportPending 每隔 interval 印出一次未完成的 todo 數量，ctx 被取消時結束。
-func reportPending(ctx context.Context, s store.Store, interval time.Duration) {
-	ticker := time.NewTicker(interval)
-	defer ticker.Stop()
-
-	notDone := false
-	for {
-		select {
-		case <-ctx.Done():
-			log.Println("reporter stopped")
-			return
-		case <-ticker.C:
-			todos, err := s.List(ctx, &notDone)
-			if err != nil {
-				log.Printf("report error: %v", err)
-				continue
-			}
-			log.Printf("pending todos: %d", len(todos))
-		}
-	}
 }
