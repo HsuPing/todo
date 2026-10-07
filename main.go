@@ -2,9 +2,7 @@ package main
 
 import (
 	"context"
-	"errors"
 	"log"
-	"net/http"
 	"os"
 	"os/signal"
 	"syscall"
@@ -15,11 +13,6 @@ import (
 )
 
 func main() {
-	port := os.Getenv("PORT")
-	if port == "" {
-		port = "8080"
-	}
-
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
@@ -34,28 +27,7 @@ func main() {
 	h = logging(h)
 
 	waitReporter := startReporter(ctx, s, 10*time.Second)
-
-	server := &http.Server{
-		Addr:    ":" + port,
-		Handler: h,
-	}
-
-	go func() {
-		log.Printf("listening on :%s", port)
-		if err := server.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
-			log.Fatal(err)
-		}
-	}()
-
-	<-ctx.Done()
-	log.Println("shutting down...")
-
-	shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-
-	if err := server.Shutdown(shutdownCtx); err != nil {
-		log.Printf("shutdown error: %v", err)
-	}
+	runServer(ctx, h)
 
 	waitReporter()
 	log.Println("shutdown complete")
