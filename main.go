@@ -25,7 +25,14 @@ func main() {
 	defer stop()
 
 	s := store.NewMemoryStore()
-	h := logging(handler.New(s))
+	h := handler.New(s)
+	/*
+		handler.go 的 http.Handler 被 middleware.go logging 包住
+		請求會先經過 logging，再交給 handler
+		logging 使用的 statusRecorder 實作了 http.ResponseWriter interface 的方法
+		所以 handler.go 在呼叫 WriteHeader 時，會執行 statusRecorder 所定義的行爲
+	*/
+	h = logging(h)
 
 	var wg sync.WaitGroup
 	wg.Add(1)
@@ -58,29 +65,6 @@ func main() {
 
 	wg.Wait()
 	log.Println("shutdown complete")
-}
-
-// logging 包住 next，每個請求都印出方法、路徑、狀態碼和花費時間。
-func logging(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		start := time.Now()
-		// handler 沒呼叫 WriteHeader 時，Go 會自動回 200，所以預設值是 200
-		rec := &statusRecorder{ResponseWriter: w, status: http.StatusOK}
-		next.ServeHTTP(rec, r)
-		log.Printf("%s %s %d %v", r.Method, r.URL.Path, rec.status, time.Since(start))
-	})
-}
-
-// statusRecorder 包住 http.ResponseWriter，把 handler 寫入的狀態碼記下來。
-type statusRecorder struct {
-	http.ResponseWriter // 嵌入：Header()、Write() 直接沿用原本的
-	status              int
-}
-
-// WriteHeader 先記下狀態碼，再轉交給原本的 ResponseWriter。
-func (rec *statusRecorder) WriteHeader(status int) {
-	rec.status = status
-	rec.ResponseWriter.WriteHeader(status)
 }
 
 // reportPending 每隔 interval 印出一次未完成的 todo 數量，ctx 被取消時結束。
