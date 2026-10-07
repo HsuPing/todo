@@ -2,7 +2,7 @@ package store
 
 import (
 	"context"
-	"sort"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -39,9 +39,11 @@ func (m *MemoryStore) List(ctx context.Context, done *bool) ([]Todo, error) {
 		}
 		todos = append(todos, todo)
 	}
-	sort.Slice(todos, func(i, j int) bool {
-		return todos[i].ID < todos[j].ID
-	})
+
+	slices.SortFunc(todos, func(a, b Todo) int { return a.ID - b.ID })
+	// sort.Slice(todos, func(i, j int) bool {
+	// 	return todos[i].ID < todos[j].ID
+	// })
 	return todos, nil
 }
 
@@ -57,9 +59,9 @@ func (m *MemoryStore) Get(ctx context.Context, id int) (Todo, error) {
 }
 
 func (m *MemoryStore) Create(ctx context.Context, title string) (Todo, error) {
-	title = strings.TrimSpace(title)
-	if title == "" || utf8.RuneCountInString(title) > MaxTitleLen {
-		return Todo{}, ErrInvalidTitle
+	title, err := normalizeTitle(title)
+	if err != nil {
+		return Todo{}, err
 	}
 
 	m.mu.Lock()
@@ -87,9 +89,9 @@ func (m *MemoryStore) Update(ctx context.Context, id int, title *string, done *b
 	}
 
 	if title != nil {
-		t := strings.TrimSpace(*title)
-		if t == "" || utf8.RuneCountInString(t) > MaxTitleLen {
-			return Todo{}, ErrInvalidTitle
+		t, err := normalizeTitle(*title)
+		if err != nil {
+			return Todo{}, err
 		}
 		todo.Title = t
 	}
@@ -113,4 +115,12 @@ func (m *MemoryStore) Delete(ctx context.Context, id int) error {
 
 	delete(m.todos, id)
 	return nil
+}
+
+func normalizeTitle(title string) (string, error) {
+	title = strings.TrimSpace(title)
+	if title == "" || utf8.RuneCountInString(title) > MaxTitleLen {
+		return "", ErrInvalidTitle
+	}
+	return title, nil
 }
