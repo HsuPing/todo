@@ -33,7 +33,7 @@ func TestMemoryStore_Create(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			s := NewMemoryStore() // 每個案例用新的 store，互不影響
 
-			got, err := s.Create(context.Background(), tt.title)
+			todo, err := s.Create(context.Background(), tt.title)
 
 			if !errors.Is(err, tt.wantErr) {
 				t.Fatalf("err = %v，預期 %v", err, tt.wantErr)
@@ -41,23 +41,23 @@ func TestMemoryStore_Create(t *testing.T) {
 			if tt.wantErr != nil {
 				return // 預期失敗的案例，錯誤對了就結束
 			}
-			if got.ID != 1 {
-				t.Errorf("ID = %d，預期 1", got.ID)
+			if todo.ID != 1 {
+				t.Errorf("ID = %d，預期 1", todo.ID)
 			}
-			if got.Title != tt.wantTitle {
-				t.Errorf("Title = %q，預期 %q", got.Title, tt.wantTitle)
+			if todo.Title != tt.wantTitle {
+				t.Errorf("Title = %q，預期 %q", todo.Title, tt.wantTitle)
 			}
-			if got.Done {
+			if todo.Done {
 				t.Errorf("Done = true，預期預設為 false")
 			}
-			if got.CreatedAt.IsZero() {
+			if todo.CreatedAt.IsZero() {
 				t.Errorf("CreatedAt 沒有設定")
 			}
 
 			// 確認真的有存進去，而不只是回傳值正確
-			stored, err := s.Get(context.Background(), got.ID)
+			stored, err := s.Get(context.Background(), todo.ID)
 			if err != nil {
-				t.Fatalf("Get(%d) err = %v，預期找得到", got.ID, err)
+				t.Fatalf("Get(%d) err = %v，預期找得到", todo.ID, err)
 			}
 			if stored.Title != tt.wantTitle {
 				t.Errorf("存進去的 Title = %q，預期 %q", stored.Title, tt.wantTitle)
@@ -71,9 +71,9 @@ func TestMemoryStore_IDNotReused(t *testing.T) {
 	s := NewMemoryStore()
 
 	for want := 1; want <= 3; want++ {
-		got, _ := s.Create(ctx, "todo")
-		if got.ID != want {
-			t.Fatalf("第 %d 筆的 ID = %d，預期 %d", want, got.ID, want)
+		todo, _ := s.Create(ctx, "todo")
+		if todo.ID != want {
+			t.Fatalf("第 %d 筆的 ID = %d，預期 %d", want, todo.ID, want)
 		}
 	}
 
@@ -81,9 +81,9 @@ func TestMemoryStore_IDNotReused(t *testing.T) {
 	if err := s.Delete(ctx, 3); err != nil {
 		t.Fatalf("Delete(3) err = %v", err)
 	}
-	got, _ := s.Create(ctx, "todo")
-	if got.ID != 4 {
-		t.Errorf("刪除後新增的 ID = %d，預期 4", got.ID)
+	todo, _ := s.Create(ctx, "todo")
+	if todo.ID != 4 {
+		t.Errorf("刪除後新增的 ID = %d，預期 4", todo.ID)
 	}
 }
 
@@ -106,7 +106,7 @@ func TestMemoryStore_Get(t *testing.T) {
 }
 
 func TestMemoryStore_Update(t *testing.T) {
-	const original = "原本的標題"
+	const originalTitle = "原本的標題"
 
 	tests := []struct {
 		name      string
@@ -118,30 +118,30 @@ func TestMemoryStore_Update(t *testing.T) {
 		wantErr   error
 	}{
 		{name: "只改 title", id: 1, title: ptr("新標題"), wantTitle: "新標題"},
-		{name: "只改 done", id: 1, done: ptr(true), wantTitle: original, wantDone: true},
+		{name: "只改 done", id: 1, done: ptr(true), wantTitle: originalTitle, wantDone: true},
 		{name: "兩個都改", id: 1, title: ptr("新標題"), done: ptr(true), wantTitle: "新標題", wantDone: true},
-		{name: "兩個都不改", id: 1, wantTitle: original},
+		{name: "兩個都不改", id: 1, wantTitle: originalTitle},
 		{name: "title 去除前後空白", id: 1, title: ptr("  新標題  "), wantTitle: "新標題"},
 		// 以下是失敗案例：store 裡的資料必須完全不變
-		{name: "title 全是空白", id: 1, title: ptr("   "), done: ptr(true), wantTitle: original, wantErr: ErrInvalidTitle},
-		{name: "title 101 個中文字", id: 1, title: ptr(strings.Repeat("中", 101)), done: ptr(true), wantTitle: original, wantErr: ErrInvalidTitle},
-		{name: "ID 不存在", id: 999, done: ptr(true), wantTitle: original, wantErr: ErrNotFound},
+		{name: "title 全是空白", id: 1, title: ptr("   "), done: ptr(true), wantTitle: originalTitle, wantErr: ErrInvalidTitle},
+		{name: "title 101 個中文字", id: 1, title: ptr(strings.Repeat("中", 101)), done: ptr(true), wantTitle: originalTitle, wantErr: ErrInvalidTitle},
+		{name: "ID 不存在", id: 999, done: ptr(true), wantTitle: originalTitle, wantErr: ErrNotFound},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			ctx := context.Background()
 			s := NewMemoryStore()
-			s.Create(ctx, original) // ID 是 1
+			s.Create(ctx, originalTitle) // ID 是 1
 
-			got, err := s.Update(ctx, tt.id, tt.title, tt.done)
+			todo, err := s.Update(ctx, tt.id, tt.title, tt.done)
 
 			if !errors.Is(err, tt.wantErr) {
 				t.Fatalf("err = %v，預期 %v", err, tt.wantErr)
 			}
-			if tt.wantErr == nil && (got.Title != tt.wantTitle || got.Done != tt.wantDone) {
+			if tt.wantErr == nil && (todo.Title != tt.wantTitle || todo.Done != tt.wantDone) {
 				t.Errorf("回傳 Title=%q Done=%v，預期 Title=%q Done=%v",
-					got.Title, got.Done, tt.wantTitle, tt.wantDone)
+					todo.Title, todo.Done, tt.wantTitle, tt.wantDone)
 			}
 
 			// 不管成功或失敗，都檢查 store 裡實際存的資料
@@ -157,15 +157,15 @@ func TestMemoryStore_Update(t *testing.T) {
 func TestMemoryStore_Delete(t *testing.T) {
 	ctx := context.Background()
 	s := NewMemoryStore()
-	created, _ := s.Create(ctx, "買牛奶")
+	todo, _ := s.Create(ctx, "買牛奶")
 
-	if err := s.Delete(ctx, created.ID); err != nil {
+	if err := s.Delete(ctx, todo.ID); err != nil {
 		t.Fatalf("Delete err = %v", err)
 	}
-	if _, err := s.Get(ctx, created.ID); !errors.Is(err, ErrNotFound) {
+	if _, err := s.Get(ctx, todo.ID); !errors.Is(err, ErrNotFound) {
 		t.Errorf("刪除後 Get err = %v，預期 ErrNotFound", err)
 	}
-	if err := s.Delete(ctx, created.ID); !errors.Is(err, ErrNotFound) {
+	if err := s.Delete(ctx, todo.ID); !errors.Is(err, ErrNotFound) {
 		t.Errorf("重複刪除 err = %v，預期 ErrNotFound", err)
 	}
 	if err := s.Delete(ctx, 999); !errors.Is(err, ErrNotFound) {
@@ -200,12 +200,12 @@ func TestMemoryStore_List(t *testing.T) {
 			if err != nil {
 				t.Fatalf("List err = %v", err)
 			}
-			var gotIDs []int
+			var todoIDs []int
 			for _, todo := range todos {
-				gotIDs = append(gotIDs, todo.ID)
+				todoIDs = append(todoIDs, todo.ID)
 			}
-			if !slices.Equal(gotIDs, tt.wantIDs) {
-				t.Errorf("IDs = %v，預期 %v", gotIDs, tt.wantIDs)
+			if !slices.Equal(todoIDs, tt.wantIDs) {
+				t.Errorf("IDs = %v，預期 %v", todoIDs, tt.wantIDs)
 			}
 		})
 	}
@@ -230,16 +230,26 @@ func TestMemoryStore_ListReturnsCopy(t *testing.T) {
 	s := NewMemoryStore()
 	s.Create(ctx, "原本的標題")
 
-	todos, _ := s.List(ctx, nil)
+	todos, err := s.List(ctx, nil)
+	if err != nil {
+		t.Fatalf("List err = %v", err)
+		return
+	}
+
 	todos[0].Title = "被呼叫端改掉"
 
-	stored, _ := s.Get(ctx, 1)
+	stored, err := s.Get(ctx, 1)
+	if err != nil {
+		t.Fatalf("Get err = %v", err)
+		return
+	}
+
 	if stored.Title != "原本的標題" {
 		t.Errorf("修改 List 的結果影響了 store：Title = %q", stored.Title)
 	}
 }
 
-// 用 go test -race 執行，才能偵測到漏加鎖的問題。
+// 用 go test -race ./store 執行，才能偵測到漏加鎖的問題。
 func TestMemoryStore_Concurrent(t *testing.T) {
 	ctx := context.Background()
 	s := NewMemoryStore()

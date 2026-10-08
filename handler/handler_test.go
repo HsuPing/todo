@@ -50,6 +50,8 @@ func TestHandler_StatusCodes(t *testing.T) {
 	}{
 		// GET /todos
 		{name: "列出全部", method: "GET", path: "/todos", wantStatus: http.StatusOK, wantBody: `"title":"買牛奶"`},
+		{name: "列出全部 done=true", method: "GET", path: "/todos?done=true", wantStatus: http.StatusOK, wantBody: `[]`},
+		{name: "列出全部 done=false", method: "GET", path: "/todos?done=false", wantStatus: http.StatusOK, wantBody: `"title":"買牛奶"`},
 		{name: "done 不是布林值", method: "GET", path: "/todos?done=abc", wantStatus: http.StatusBadRequest, wantBody: `"error"`},
 		{name: "done 是 1", method: "GET", path: "/todos?done=1", wantStatus: http.StatusBadRequest, wantBody: `"error"`},
 
@@ -67,7 +69,10 @@ func TestHandler_StatusCodes(t *testing.T) {
 		{name: "新增有未知欄位", method: "POST", path: "/todos", body: `{"title":"a","priority":1}`, wantStatus: http.StatusBadRequest, wantBody: `"error"`},
 
 		// PUT /todos/{id}
-		{name: "更新成功", method: "PUT", path: "/todos/1", body: `{"done":true}`, wantStatus: http.StatusOK, wantBody: `"done":true`},
+		{name: "更新狀態 done 為 true", method: "PUT", path: "/todos/1", body: `{"done":true}`, wantStatus: http.StatusOK, wantBody: `"done":true`},
+		{name: "更新狀態 done 為 false", method: "PUT", path: "/todos/1", body: `{"done":false}`, wantStatus: http.StatusOK, wantBody: `"done":false`},
+		{name: "更新 title", method: "PUT", path: "/todos/1", body: `{"title":"買豆漿"}`, wantStatus: http.StatusOK, wantBody: `"title":"買豆漿"`},
+		{name: "更新 title 和狀態", method: "PUT", path: "/todos/1", body: `{"title":"買豆漿", "done":true}`, wantStatus: http.StatusOK, wantBody: `"title":"買豆漿","done":true`},
 		{name: "更新 title 空白", method: "PUT", path: "/todos/1", body: `{"title":""}`, wantStatus: http.StatusBadRequest, wantBody: `"error"`},
 		{name: "更新不存在的 id", method: "PUT", path: "/todos/999", body: `{"done":true}`, wantStatus: http.StatusNotFound, wantBody: `"error"`},
 		{name: "更新 id 不是數字", method: "PUT", path: "/todos/abc", body: `{"done":true}`, wantStatus: http.StatusBadRequest, wantBody: `"error"`},
@@ -113,10 +118,10 @@ func TestHandler_Create(t *testing.T) {
 	if ct := rec.Header().Get("Content-Type"); ct != "application/json" {
 		t.Errorf("Content-Type = %q，預期 application/json", ct)
 	}
-	var got store.Todo
-	decode(t, rec, &got)
-	if got.ID != 2 || got.Title != "買豆漿" || got.Done {
-		t.Errorf("回傳 %+v，預期 ID=2 Title=買豆漿 Done=false", got)
+	var todo store.Todo
+	decode(t, rec, &todo)
+	if todo.ID != 2 || todo.Title != "買豆漿" || todo.Done {
+		t.Errorf("回傳 %+v，預期 ID=2 Title=買豆漿 Done=false", todo)
 	}
 
 	// 確認真的存進去了
@@ -128,18 +133,18 @@ func TestHandler_Create(t *testing.T) {
 // 只送部分欄位時，沒送的欄位必須維持原值。
 func TestHandler_UpdateKeepsOtherFields(t *testing.T) {
 	h := newHandler(t)
-	var got store.Todo
+	var todo store.Todo
 
 	// 只送 done：title 不能被清空
-	decode(t, do(h, "PUT", "/todos/1", `{"done":true}`), &got)
-	if got.Title != "買牛奶" || !got.Done {
-		t.Errorf("只改 done 後 = %+v，預期 Title=買牛奶 Done=true", got)
+	decode(t, do(h, "PUT", "/todos/1", `{"done":true}`), &todo)
+	if todo.Title != "買牛奶" || !todo.Done {
+		t.Errorf("只改 done 後 = %+v，預期 Title=買牛奶 Done=true", todo)
 	}
 
 	// 只送 title：done 不能被改回 false
-	decode(t, do(h, "PUT", "/todos/1", `{"title":"買豆漿"}`), &got)
-	if got.Title != "買豆漿" || !got.Done {
-		t.Errorf("只改 title 後 = %+v，預期 Title=買豆漿 Done=true", got)
+	decode(t, do(h, "PUT", "/todos/1", `{"title":"買豆漿"}`), &todo)
+	if todo.Title != "買豆漿" || !todo.Done {
+		t.Errorf("只改 title 後 = %+v，預期 Title=買豆漿 Done=true", todo)
 	}
 }
 
