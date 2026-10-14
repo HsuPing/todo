@@ -12,7 +12,7 @@ import (
 // MemoryStore 是以記憶體儲存資料的 Store 實作。
 
 type MemoryStore struct {
-	mu     sync.Mutex
+	mu     sync.RWMutex
 	todos  map[int]Todo
 	nextID int
 }
@@ -29,8 +29,8 @@ func NewMemoryStore() *MemoryStore {
 }
 
 func (m *MemoryStore) List(ctx context.Context, done *bool) ([]Todo, error) {
-	m.mu.Lock()
-	defer m.mu.Unlock()
+	m.mu.RLock()
+	defer m.mu.RUnlock()
 
 	todos := make([]Todo, 0, len(m.todos))
 	for _, todo := range m.todos {
@@ -48,8 +48,8 @@ func (m *MemoryStore) List(ctx context.Context, done *bool) ([]Todo, error) {
 }
 
 func (m *MemoryStore) Get(ctx context.Context, id int) (Todo, error) {
-	m.mu.Lock()
-	defer m.mu.Unlock()
+	m.mu.RLock()
+	defer m.mu.RUnlock()
 
 	todo, ok := m.todos[id]
 	if !ok {
