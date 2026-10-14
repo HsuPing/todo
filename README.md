@@ -51,3 +51,107 @@ docker rmi todo
 ```
 
 ## 2. curl 範例
+
+以下假設 server 跑在 `localhost:8080`，改過 port 的話請自行替換。
+想看狀態碼的話，在 `curl` 後面加 `-i`。
+
+### 新增 todo
+
+```bash
+curl -X POST localhost:8080/todos -H 'Content-Type: application/json' -d '{"title":"買牛奶"}'
+```
+
+回應 `201 Created`：
+
+```json
+{"id":1,"title":"買牛奶","done":false,"created_at":"2026-10-14T09:39:45.474691+08:00"}
+```
+
+### 列出全部 todo
+
+```bash
+curl localhost:8080/todos
+```
+
+回應 `200 OK`，依 id 由小到大排序，沒有資料時回傳 `[]`：
+
+```json
+[{"id":1,"title":"買牛奶","done":false,"created_at":"2026-10-14T09:39:45.474691+08:00"},{"id":2,"title":"寫作業","done":false,"created_at":"2026-10-14T09:39:45.487402+08:00"}]
+```
+
+### 只列出已完成 / 未完成的 todo
+
+```bash
+curl 'localhost:8080/todos?done=true'
+```
+
+```bash
+curl 'localhost:8080/todos?done=false'
+```
+
+`done` 只接受 `true` 或 `false`。
+
+### 取得單筆 todo
+
+```bash
+curl localhost:8080/todos/1
+```
+
+回應 `200 OK`：
+
+```json
+{"id":1,"title":"買牛奶","done":false,"created_at":"2026-10-14T09:39:45.474691+08:00"}
+```
+
+### 更新 todo
+
+`title` 和 `done` 可以只傳其中一個，沒傳的欄位不會變。
+
+```bash
+curl -X PUT localhost:8080/todos/1 -H 'Content-Type: application/json' -d '{"done":true}'
+```
+
+```bash
+curl -X PUT localhost:8080/todos/1 -H 'Content-Type: application/json' -d '{"title":"買豆漿","done":false}'
+```
+
+回應 `200 OK`，內容是更新後的 todo：
+
+```json
+{"id":1,"title":"買豆漿","done":false,"created_at":"2026-10-14T09:39:45.474691+08:00"}
+```
+
+### 刪除 todo
+
+```bash
+curl -i -X DELETE localhost:8080/todos/1
+```
+
+回應 `204 No Content`，沒有 body。
+
+### 錯誤回應
+
+錯誤一律回傳 `{"error": "訊息"}`：
+
+| 情況 | 狀態碼 | 回應 |
+| --- | --- | --- |
+| id 不是正整數，例如 `/todos/abc` | 400 | `{"error":"invalid id"}` |
+| `done` 參數不是 `true` / `false` | 400 | `{"error":"invalid done"}` |
+| JSON 格式錯誤，或帶了不認識的欄位 | 400 | `{"error":"invalid JSON"}` |
+| title 是空白，或超過 100 個字 | 400 | `{"error":"invalid title"}` |
+| PUT 時 `title` 和 `done` 都沒傳 | 400 | `{"error":"no fields to update"}` |
+| 找不到該 id 的 todo | 404 | `{"error":"todo not found"}` |
+
+例如：
+
+```bash
+curl -i localhost:8080/todos/999
+```
+
+```
+HTTP/1.1 404 Not Found
+Content-Type: application/json
+
+{"error":"todo not found"}
+```
+
