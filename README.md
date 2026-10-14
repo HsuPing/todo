@@ -1,19 +1,3 @@
-1. 怎麼啟動
-開啟 terminal 後，cd 到此資料夾目錄後，執行 `go run .`
-如果遇到 port 8080 被佔用，可以使用 `PORT=8081 go run .`。8081 為範例，可以改成其他 port 號碼。
-
-Docker 啟動
-1. 建置 Docker 映像檔
-`docker build -t todo .`
-2. 啟動容器
-`docker run -p 8080:8080 todo`
-3. 停止容器
-`docker stop todo`
-4. 刪除容器
-`docker rm todo`
-5. 刪除映像檔
-`docker rmi todo`
-
 ## 1. 怎麼啟動
 
 需要的環境（二選一）：
@@ -22,15 +6,19 @@ Docker 啟動
 - 用 Docker
 
 ### 用 GO 執行
+
 開啟 terminal 後，cd 到此資料夾目錄後，執行：
+
 ```bash
 go run .
 ```
 
 如果遇到 port 8080 被佔用，可以使用 
+
 ```bash
 PORT=[自定義的 port 號碼] go run .
 ```
+
 來改成其他 port 號。
 
 ### 用 Docker 執行（不需要安裝 Go）
@@ -67,6 +55,8 @@ curl -X POST localhost:8080/todos -H 'Content-Type: application/json' -d '{"titl
 {"id":1,"title":"買牛奶","done":false,"created_at":"2026-10-14T09:39:45.474691+08:00"}
 ```
 
+
+
 ### 列出全部 todo
 
 ```bash
@@ -78,6 +68,8 @@ curl localhost:8080/todos
 ```json
 [{"id":1,"title":"買牛奶","done":false,"created_at":"2026-10-14T09:39:45.474691+08:00"},{"id":2,"title":"寫作業","done":false,"created_at":"2026-10-14T09:39:45.487402+08:00"}]
 ```
+
+
 
 ### 只列出已完成 / 未完成的 todo
 
@@ -103,6 +95,8 @@ curl localhost:8080/todos/1
 {"id":1,"title":"買牛奶","done":false,"created_at":"2026-10-14T09:39:45.474691+08:00"}
 ```
 
+
+
 ### 更新 todo
 
 `title` 和 `done` 可以只傳其中一個，沒傳的欄位不會變。
@@ -121,6 +115,8 @@ curl -X PUT localhost:8080/todos/1 -H 'Content-Type: application/json' -d '{"tit
 {"id":1,"title":"買豆漿","done":false,"created_at":"2026-10-14T09:39:45.474691+08:00"}
 ```
 
+
+
 ### 刪除 todo
 
 ```bash
@@ -133,14 +129,16 @@ curl -i -X DELETE localhost:8080/todos/1
 
 錯誤一律回傳 `{"error": "訊息"}`：
 
-| 情況 | 狀態碼 | 回應 |
-| --- | --- | --- |
-| id 不是正整數，例如 `/todos/abc` | 400 | `{"error":"invalid id"}` |
-| `done` 參數不是 `true` / `false` | 400 | `{"error":"invalid done"}` |
-| JSON 格式錯誤，或帶了不認識的欄位 | 400 | `{"error":"invalid JSON"}` |
-| title 是空白，或超過 100 個字 | 400 | `{"error":"invalid title"}` |
-| PUT 時 `title` 和 `done` 都沒傳 | 400 | `{"error":"no fields to update"}` |
-| 找不到該 id 的 todo | 404 | `{"error":"todo not found"}` |
+
+| 情況                           | 狀態碼 | 回應                                |
+| ---------------------------- | --- | --------------------------------- |
+| id 不是正整數，例如 `/todos/abc`     | 400 | `{"error":"invalid id"}`          |
+| `done` 參數不是 `true` / `false` | 400 | `{"error":"invalid done"}`        |
+| JSON 格式錯誤，或帶了不認識的欄位          | 400 | `{"error":"invalid JSON"}`        |
+| title 是空白，或超過 100 個字         | 400 | `{"error":"invalid title"}`       |
+| PUT 時 `title` 和 `done` 都沒傳   | 400 | `{"error":"no fields to update"}` |
+| 找不到該 id 的 todo               | 404 | `{"error":"todo not found"}`      |
+
 
 例如：
 
@@ -154,4 +152,40 @@ Content-Type: application/json
 
 {"error":"todo not found"}
 ```
+
+
+
+## 3. 做了哪些加分題
+
+- Graceful shutdown
+在 server.go 中，按 Ctrl+C 後不再接新請求，等處理中的請求完成才結束，最多等 5 秒。
+- Logging middleware
+在 middleware.go 中，每個請求印出 method、path、狀態碼和處理時間。
+- 背景工作
+在 reporter.go 中，使用 time.Ticker 每 10 秒印出一次未完成的 todo 數量。
+- Dockerfile
+使用 multi-stage build，最後的映像檔只放編譯好的執行檔。
+
+
+
+## 4. 遇到的困難，或你覺得還可以改進的地方
+
+
+
+### 遇到的困難
+
+- C# 的習慣：我常常不自覺把 struct 當成 C# 的 class 來想。像是用一個 nil 的指標去呼叫方法，我以為拿不到正常的結果，結果只要方法裡沒有用到欄位，就能正常執行。後來才知道 go 傳參數都是複製一份，要改到原本的值就要傳指標，所以 MemoryStore 的方法都是用 *MemoryStore。
+- interface：go 不用像 C# 一樣宣告實作哪個介面，方法都有就算實作，也沒有繼承。一開始對 ResponseWriter 不熟，不知道裡面有哪些方法。看 middleware 的時候，我把 statusRecorder 的 WriteHeader 刪掉，程式也沒有報錯，也找不到哪裡有呼叫它，那時候完全看不懂。後來才理解 statusRecorder 用的是嵌入：把 ResponseWriter 直接放進 struct，它的方法就會變成 statusRecorder 的方法，我自己寫的 WriteHeader 會蓋掉原本的。所以刪掉之後程式還是能跑，只是 log 印出來的狀態碼會一直是 200。這個模式習慣 C# 的我有點不直觀。
+- slice：一開始覺得很像 C# 的 List，但又不太像。我以為把 slice 傳進函式 append 之後，外面的長度也會跟著變，結果沒有。後來才懂 slice 裡面是 ptr、len、cap，傳進去時 ptr 指向同一個 array，所以改元素外面看得到，但 len 和 cap 是各自的。
+- 併發：寫 Get 的時候我沒有上鎖，因為覺得只是讀資料，不會改到東西。後來跑 go test -race 才發現，Get 在讀 map 的時候，Create 可能同時在寫，server 真的遇到會直接當掉。這讓我知道只要有人可能在寫，讀也要上鎖。後來 MemoryStore 改成 RWMutex，讀和讀可以同時進行，但有人在寫的時候就要等。
+- 方法要寫在哪裡：原本 handler 的路由都寫在 New 裡面，我想把每個路由拆成獨立的函式，就寫了 func (s *store.Store) list(...)，想讓它直接用 store，結果編譯失敗。後來才知道不能幫別的 package 的型別加方法，interface 也不能有實作，所以改成在 handler 自己定義一個 api struct，把 store 放進去，方法掛在 api 上。
+- channel：這是我最不熟的部分。我以為 close 就是把 channel 釋放掉，後來才知道它只是告訴接收的一方不會再送了，裡面還沒讀的值還是讀得到。容量也搞混過，以為 make(chan int, 3) 只放了兩個值的話，第三格會讀到 0。
+- 測試：之前做 Unity 沒有寫過單元測試，一開始不知道 _test.go 要怎麼寫。這次寫下來的感覺是先設定好情境，和該情境應該產生的結果。但自己寫程式又自己寫測試，有點球員兼裁判：第一次用批改程式檢查時，有 4 個規格要求的情況（像是 id 是 0 要回 400），我的測試都沒有測到。後來把這 4 個情況也補進測試裡。
+
+### 還可以改進的地方
+
+- 熟悉 go 的 package：我有程式的基本概念，卡住的通常是不知道要用哪個 package、呼叫哪個函式。這次主要是先問 AI 該用什麼，再自己寫、跑測試確認，也請 AI 出題考我，用測驗找出自己不懂的地方。之後想繼續用這種方式，把常用的 struct 和 api 熟悉起來。
+- 500 沒有測到：handler 的測試覆蓋率是 96.2%，沒測到的是 store 出錯時回 500 的那段。MemoryStore 不會回傳這種錯誤，所以之後想寫一個故意出錯的假 store 來測。
+- 資料只存在記憶體：server 一重開，資料就不見了。之後想加上 MySQL，讓 main 看有沒有設定環境變數，來決定要用記憶體還是 MySQL，這樣原本的 MemoryStore 也可以留著用。
+- Docker：加上 MySQL 之後，會從現在的一個 container 變成兩個，一個跑 go 程式，一個跑 MySQL。我目前了解 Docker 的用途，但設定參數還不熟。之後想學 docker compose，用一個設定檔把兩個 container 一起開起來。
 
