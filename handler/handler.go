@@ -4,6 +4,7 @@ package handler
 import (
 	"encoding/json"
 	"errors"
+	"log"
 	"net/http"
 	"strconv"
 
@@ -164,6 +165,7 @@ func writeStoreError(w http.ResponseWriter, err error) {
 	case errors.Is(err, store.ErrInvalidTitle):
 		writeError(w, http.StatusBadRequest, "invalid title")
 	default:
+		log.Printf("store error: %v", err)
 		writeError(w, http.StatusInternalServerError, "internal error")
 	}
 }

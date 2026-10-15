@@ -41,9 +41,6 @@ func (m *MemoryStore) List(ctx context.Context, done *bool) ([]Todo, error) {
 	}
 
 	slices.SortFunc(todos, func(a, b Todo) int { return a.ID - b.ID })
-	// sort.Slice(todos, func(i, j int) bool {
-	// 	return todos[i].ID < todos[j].ID
-	// })
 	return todos, nil
 }
 
