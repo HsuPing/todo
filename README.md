@@ -185,7 +185,7 @@ Content-Type: application/json
 ### 還可以改進的地方
 
 - 熟悉 go 的 package：我有程式的基本概念，卡住的通常是不知道要用哪個 package、呼叫哪個函式。這次主要是先問 AI 該用什麼，再自己寫、跑測試確認，也請 AI 出題考我，用測驗找出自己不懂的地方。之後想繼續用這種方式，把常用的 struct 和 api 熟悉起來。
-- 500 沒有測到：handler 的測試覆蓋率是 96.2%，沒測到的是 store 出錯時回 500 的那段。MemoryStore 不會回傳這種錯誤，所以之後想寫一個故意出錯的假 store 來測。
+- 500 沒有測到：handler 的測試覆蓋率是 94%，沒測到的是 store 出錯時回 500 的那段。MemoryStore 不會回傳這種錯誤，所以之後想寫一個故意出錯的假 store 來測。
 - 資料只存在記憶體：server 一重開，資料就不見了。之後想加上 MySQL，讓 main 看有沒有設定環境變數，來決定要用記憶體還是 MySQL，這樣原本的 MemoryStore 也可以留著用。
 - Docker：加上 MySQL 之後，會從現在的一個 container 變成兩個，一個跑 go 程式，一個跑 MySQL。我目前了解 Docker 的用途，但設定參數還不熟。之後想學 docker compose，用一個設定檔把兩個 container 一起開起來。
 
