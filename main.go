@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"database/sql"
 	"log"
 	"os"
 	"os/signal"
@@ -16,14 +17,26 @@ func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
-	s := store.NewMemoryStore()
+	mysql_dsn := os.Getenv("MYSQL_DSN")
+
+	var s store.Store
+	if mysql_dsn != "" {
+		db, err := sql.Open("mysql", mysql_dsn)
+		if err != nil {
+			log.Fatal(err)
+		}
+		defer db.Close()
+
+		err = db.PingContext(ctx)
+		if err != nil {
+			log.Fatal(err)
+		}
+		s = store.NewMySQLStore(db)
+	} else {
+		s = store.NewMemoryStore()
+	}
 	h := handler.New(s)
-	/*
-		handler.go 的 http.Handler 被 middleware.go logging 包住
-		請求會先經過 logging，再交給 handler
-		logging 使用的 statusRecorder 實作了 http.ResponseWriter interface 的方法
-		所以 handler.go 在呼叫 WriteHeader 時，會執行 statusRecorder 所定義的行爲
-	*/
+
 	h = logging(h)
 
 	waitReporter := startReporter(ctx, s, 10*time.Second)
