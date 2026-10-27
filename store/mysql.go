@@ -8,6 +8,8 @@ import (
 	_ "github.com/go-sql-driver/mysql"
 )
 
+const todoColumns = "id, title, done, created_at"
+
 type MySQLStore struct {
 	db *sql.DB
 }
@@ -24,9 +26,9 @@ func (m *MySQLStore) List(ctx context.Context, done *bool) ([]Todo, error) {
 	var err error
 
 	if done == nil {
-		rows, err = m.db.QueryContext(ctx, "SELECT id, title, done, created_at FROM todos ORDER BY id")
+		rows, err = m.db.QueryContext(ctx, "SELECT "+todoColumns+" FROM todos ORDER BY id")
 	} else {
-		rows, err = m.db.QueryContext(ctx, "SELECT id, title, done, created_at FROM todos WHERE done = ? ORDER BY id", *done)
+		rows, err = m.db.QueryContext(ctx, "SELECT "+todoColumns+" FROM todos WHERE done = ? ORDER BY id", *done)
 	}
 
 	if err != nil {
@@ -54,7 +56,7 @@ func (m *MySQLStore) List(ctx context.Context, done *bool) ([]Todo, error) {
 }
 
 func (m *MySQLStore) Get(ctx context.Context, id int) (Todo, error) {
-	row := m.db.QueryRowContext(ctx, "SELECT id, title, done, created_at FROM todos WHERE id = ?", id)
+	row := m.db.QueryRowContext(ctx, "SELECT "+todoColumns+" FROM todos WHERE id = ?", id)
 	t := Todo{}
 
 	if err := row.Scan(&t.ID, &t.Title, &t.Done, &t.CreatedAt); err != nil {
@@ -97,8 +99,19 @@ func (m *MySQLStore) Update(ctx context.Context, id int, title *string, done *bo
 		}
 	}
 
-	todo, err := m.Get(ctx, id)
+	tx, err := m.db.BeginTx(ctx, nil)
 	if err != nil {
+		return Todo{}, err
+	}
+	defer tx.Rollback()
+
+	row := tx.QueryRowContext(ctx, "SELECT "+todoColumns+" FROM todos WHERE id = ? FOR UPDATE", id)
+	todo := Todo{}
+
+	if err := row.Scan(&todo.ID, &todo.Title, &todo.Done, &todo.CreatedAt); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return Todo{}, ErrNotFound
+		}
 		return Todo{}, err
 	}
 
@@ -110,8 +123,12 @@ func (m *MySQLStore) Update(ctx context.Context, id int, title *string, done *bo
 		todo.Title = t
 	}
 
-	_, err = m.db.ExecContext(ctx, "UPDATE todos SET title = ?, done = ? WHERE id = ?", todo.Title, todo.Done, id)
+	_, err = tx.ExecContext(ctx, "UPDATE todos SET title = ?, done = ? WHERE id = ?", todo.Title, todo.Done, id)
 	if err != nil {
+		return Todo{}, err
+	}
+
+	if err := tx.Commit(); err != nil {
 		return Todo{}, err
 	}
 
