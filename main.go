@@ -25,6 +25,8 @@ func main() {
 		if err != nil {
 			log.Fatal(err)
 		}
+
+		db.SetMaxOpenConns(10)
 		defer db.Close()
 
 		err = db.PingContext(ctx)
