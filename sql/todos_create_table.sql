@@ -1,0 +1,7 @@
+CREATE TABLE todos(
+    id INT AUTO_INCREMENT NOT NULL,
+    title VARCHAR(100) NOT NULL,
+    done boolean NOT NULL DEFAULT FALSE,
+    created_at DATETIME NOT NULL,
+    PRIMARY KEY (id)
+);
