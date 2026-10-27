@@ -38,6 +38,60 @@ func newTestMySQLStore(t *testing.T) *MySQLStore {
 	return NewMySQLStore(db)
 }
 
+func TestMySQLStore_Create(t *testing.T) {
+	tests := []struct {
+		name      string // 案例名稱，失敗時會印出來
+		title     string // 輸入
+		wantTitle string // 預期存進去的 title
+		wantErr   error  // 預期的錯誤；nil 表示預期成功
+	}{
+		{name: "正常新增", title: "Buy Milk", wantTitle: "Buy Milk"},
+		{name: "中文", title: "買牛奶", wantTitle: "買牛奶"},
+		{name: "去除前後空白", title: "  買牛奶  ", wantTitle: "買牛奶"},
+		{name: "剛好 100 個中文字", title: strings.Repeat("中", 100), wantTitle: strings.Repeat("中", 100)},
+		{name: "100 個中文字加前後空白", title: "  " + strings.Repeat("中", 100) + "  ", wantTitle: strings.Repeat("中", 100)},
+		{name: "title 為空字串", title: "", wantErr: ErrInvalidTitle},
+		{name: "title 全是空白", title: " \t\n ", wantErr: ErrInvalidTitle},
+		{name: "101 個中文字", title: strings.Repeat("中", 101), wantErr: ErrInvalidTitle},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			s := newTestMySQLStore(t)
+
+			todo, err := s.Create(context.Background(), tt.title)
+
+			if !errors.Is(err, tt.wantErr) {
+				t.Fatalf("err = %v，預期 %v", err, tt.wantErr)
+			}
+			if tt.wantErr != nil {
+				return // 預期失敗的案例，錯誤對了就結束
+			}
+			if todo.ID != 1 {
+				t.Errorf("ID = %d，預期 1", todo.ID)
+			}
+			if todo.Title != tt.wantTitle {
+				t.Errorf("Title = %q，預期 %q", todo.Title, tt.wantTitle)
+			}
+			if todo.Done {
+				t.Errorf("Done = true，預期預設為 false")
+			}
+			if todo.CreatedAt.IsZero() {
+				t.Errorf("CreatedAt 沒有設定")
+			}
+
+			// 確認真的有存進去，而不只是回傳值正確
+			stored, err := s.Get(context.Background(), todo.ID)
+			if err != nil {
+				t.Fatalf("Get(%d) err = %v，預期找得到", todo.ID, err)
+			}
+			if stored.Title != tt.wantTitle {
+				t.Errorf("存進去的 Title = %q，預期 %q", stored.Title, tt.wantTitle)
+			}
+		})
+	}
+}
+
 func TestMySQLStore_IDNotReused(t *testing.T) {
 	ctx := context.Background()
 	s := newTestMySQLStore(t)
@@ -66,6 +120,28 @@ func TestMySQLStore_IDNotReused(t *testing.T) {
 
 	if todo.ID != 4 {
 		t.Errorf("刪除後新增的 ID = %d，預期 4", todo.ID)
+	}
+}
+
+func TestMySQLStore_Get(t *testing.T) {
+	ctx := context.Background()
+	s := newTestMySQLStore(t)
+	created, err := s.Create(ctx, "買牛奶")
+
+	if err != nil {
+		t.Fatalf("Create err = %v", err)
+	}
+
+	got, err := s.Get(ctx, created.ID)
+	if err != nil {
+		t.Fatalf("Get(%d) err = %v", created.ID, err)
+	}
+	if got != created {
+		t.Errorf("Get = %+v，預期 %+v", got, created)
+	}
+
+	if _, err := s.Get(ctx, 999); !errors.Is(err, ErrNotFound) {
+		t.Errorf("Get(999) err = %v，預期 ErrNotFound", err)
 	}
 }
 
