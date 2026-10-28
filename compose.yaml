@@ -1,0 +1,26 @@
+services:
+  db:
+    image: mysql:8.4
+    environment:
+      MYSQL_ROOT_PASSWORD: secret
+      MYSQL_DATABASE: todo
+    volumes:
+      - ./sql:/docker-entrypoint-initdb.d
+      - mysql-data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "-uroot", "-psecret"]
+      interval: 2s
+      timeout: 5s
+      retries: 30
+  app:
+    build: .
+    ports:
+      - "8080:8080"
+    environment:
+      MYSQL_DSN: "root:secret@tcp(db:3306)/todo?parseTime=true"
+    depends_on:
+      db:
+        condition: service_healthy
+
+volumes:
+  mysql-data:

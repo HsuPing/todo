@@ -58,13 +58,49 @@ docker run --rm -p 8080:8080 todo
 
 如果 port 8080 被佔用，改 `-p` 左邊的數字，例如 `-p 8081:8080`，之後連線到 `localhost:8081`。
 
-用 Docker 執行時，資料存在記憶體裡，還沒有接上 MySQL。
+這種方式資料存在記憶體裡。要用 MySQL 的話，改用下面的 docker compose。
 
 不再需要映像檔時：
 
 ```bash
 docker rmi todo
 ```
+
+### 用 docker compose 執行（Go + MySQL，不需要安裝 Go）
+
+一個指令同時開兩個 container：一個跑 go 程式，一個跑 MySQL。資料存在 MySQL 裡，重開也還在。
+
+```bash
+docker compose up -d
+```
+
+MySQL 第一次啟動時，會自動執行 `sql/` 裡的檔案建好表格。go 程式會等 MySQL 準備好才啟動，所以第一次要等幾秒，之後就能連到 `localhost:8080`。
+
+改了程式之後，要加 `--build` 重新建立映像檔，不然跑的還是舊的程式：
+
+```bash
+docker compose up -d --build
+```
+
+看 go 程式的 log：
+
+```bash
+docker compose logs app
+```
+
+關掉（container 會刪掉，但資料會留著，下次 `up` 資料還在）：
+
+```bash
+docker compose down
+```
+
+連資料一起清掉，下次 `up` 會從空的表格開始：
+
+```bash
+docker compose down -v
+```
+
+如果 port 8080 被佔用，把 `compose.yaml` 裡 `"8080:8080"` 左邊的數字改掉，例如 `"8081:8080"`。
 
 ### 跑測試
 
@@ -237,10 +273,11 @@ Content-Type: application/json
 - 測試：之前做 Unity 沒有寫過單元測試，一開始不知道 _test.go 要怎麼寫。這次寫下來的感覺是先設定好情境，和該情境應該產生的結果。但自己寫程式又自己寫測試，有點球員兼裁判：第一次用批改程式檢查時，有 4 個規格要求的情況（像是 id 是 0 要回 400），我的測試都沒有測到。後來把這 4 個情況也補進測試裡。
 - defer 什麼時候執行：加 MySQL 時，同一個錯誤我犯了兩次。我在 NewMySQLStore 裡寫了 defer db.Close()，以為程式結束才會關，結果 defer 是在 NewMySQLStore 自己結束時就執行，拿到的連線已經被關掉，每次查詢都回 database is closed。後來寫測試用的輔助函式又犯了一次。另外在 Update 裡，我在 if 裡面用 := 想設定外面的變數，結果是建立了一個新的變數，外面的還是空的。
 - MySQL 的併發：一次只送一個請求時都正常，同時很多請求就出問題。第一個是兩個 Update 同時改同一筆時，兩邊都先讀出舊資料再寫回去，後寫的會把先寫的蓋掉，AI 幫我用測試同時跑了 200 次，每次都發生。解法是交易（transaction）加上 SELECT ... FOR UPDATE，讓同一筆資料在改完之前，其他請求要先等。這段我一開始看不懂，請 AI 先示範一次，再一步一步看懂流程。第二個是把 MemoryStore 的併發測試搬到 MySQL 時出現 Too many connections：sql.DB 預設不限制連線數，300 個 goroutine 同時開連線，超過了 MySQL 的上限 151 條，最後用 SetMaxOpenConns 限制最多 10 條，多的請求排隊等。
+- docker compose：compose.yaml 的參數我還不熟，是請 AI 寫好，再一行一行對照我之前用過的 docker run 指令看懂。裡面有兩個重點。第一個是在 container 裡，127.0.0.1 指的是 container 自己，所以 go 程式要用服務名稱 db 去連 MySQL。第二個是啟動順序：先只寫 depends_on，從空的狀態啟動時，go 程式比 MySQL 早了 5 秒去連線，連不上就結束了。depends_on 只保證 MySQL 先啟動，不保證它已經準備好。後來在 MySQL 加上 healthcheck（每 2 秒試著連一次），go 程式等檢查通過才啟動。
 
 ### 還可以改進的地方
 
 - 熟悉 go 的 package：我有程式的基本概念，卡住的通常是不知道要用哪個 package、呼叫哪個函式。這次主要是先問 AI 該用什麼，再自己寫、跑測試確認，也請 AI 出題考我，用測驗找出自己不懂的地方。之後想繼續用這種方式，把常用的 struct 和 api 熟悉起來。
 - 500 沒有測到：handler 的測試覆蓋率是 94%，沒測到的是 store 出錯時回 500 的那段。MemoryStore 不會回傳這種錯誤，所以之後想寫一個故意出錯的假 store 來測。
 - MySQL 的重複程式碼：mysql.go 裡把一筆資料讀進 Todo 的 Scan 寫了三次，之後想抽成一個共用的函式。mysql_test.go 是把 memory_test.go 的測試逐個複製過來，同樣的測試案例有兩份，之後想改成兩個 store 共用同一組測試。
-- Docker：加上 MySQL 之後，會從現在的一個 container 變成兩個，一個跑 go 程式，一個跑 MySQL。我目前了解 Docker 的用途，但設定參數還不熟。之後想學 docker compose，用一個設定檔把兩個 container 一起開起來。
+- 密碼寫在檔案裡：MySQL 的密碼直接寫在 compose.yaml 裡，用指令連 MySQL 時也會看到 `Using a password on the command line interface can be insecure` 的警告。之後想把密碼移到另一個不放進 git 的設定檔（.env）。
